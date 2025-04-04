@@ -87,7 +87,7 @@ If you need to verify the exact OpenSSL version used by your Unreal Engine insta
 
 Select the corresponding version when prompted by the build script to ensure compatibility.
 
-# Building the SDK
+# Building the SDK with CloudShell
 
 **Open** the AWS Management Console, and make sure your region is N.Virginia for this example. Then launch AWS CloudShell:
 
