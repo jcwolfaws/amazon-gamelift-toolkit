@@ -74,7 +74,7 @@ RUN mkdir SDK && cd SDK && \
     fi && \
     # Build the SDK
     echo "Building GameLift Server SDK..." && \
-    cmake --build cmake-build --target all > /dev/null && \
+    cmake --build cmake-build --target all -j$(nproc) > /dev/null && \
     cd ./cmake-build/prefix/ && \
     cp -r ./lib/* /binaries/${TARGETARCH}/ && \
     mkdir -p /binaries/${TARGETARCH}/include && \
