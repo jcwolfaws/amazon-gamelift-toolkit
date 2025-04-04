@@ -342,5 +342,5 @@ if [[ "$build_amd64" = true && "$build_arm64" = true ]] && [ -f "AL2023GameliftU
 fi
 
 echo ""
-echo "Select Actions -> Download File and type the full path to download the binaries."
+echo "If on CloudShell, select Actions -> Download File and type the full path to download the binaries."
 echo "For example: /home/cloudshell-user/amazon-gamelift-toolkit/building-gamelift-server-sdk-for-unreal-engine-and-amazon-linux/AL2023GameliftUE5sdk-multiarch.zip"
