@@ -2,6 +2,10 @@
 include/
 cmake/
 libaws-cpp-sdk-gamelift-server.so
-AL2023GameliftUE5sdk.zip
+AL2023GameliftUE5sdk-amd64.zip
+AL2023GameliftUE5sdk-arm64.zip
+AL2023GameliftUE5sdk-multiarch.zip
+AL2023GameliftUE5sdk-multiarch/
 libcrypto.so*
 libssl.so*
+.DS_Store
