@@ -7,9 +7,9 @@ ARG BUILDPLATFORM
 ARG OPENSSL_VERSION=1.1.1n
 
 # Install only the essential dependencies with minimal extras
-RUN yum install -y --setopt=install_weak_deps=False \
+RUN yum install -y -q --setopt=install_weak_deps=False \
     gcc-c++ cmake3 git wget openssl-devel tar perl sudo findutils \
-    && yum clean all \
+    && yum clean all -q \
     && rm -rf /var/cache/yum
 
 # Format OpenSSL version string for download URL
@@ -17,28 +17,26 @@ RUN echo "Configuring OpenSSL version ${OPENSSL_VERSION}" && \
     OPENSSL_FORMAT_VERSION=$(echo "${OPENSSL_VERSION}" | tr '.' '_')
 
 # Install correct OpenSSL version based on build arg
-RUN wget https://github.com/openssl/openssl/archive/refs/tags/OpenSSL_$(echo "${OPENSSL_VERSION}" | tr '.' '_').tar.gz && \
+RUN wget -q https://github.com/openssl/openssl/archive/refs/tags/OpenSSL_$(echo "${OPENSSL_VERSION}" | tr '.' '_').tar.gz && \
     tar -xzf OpenSSL_$(echo "${OPENSSL_VERSION}" | tr '.' '_').tar.gz && \
     cd openssl-OpenSSL_$(echo "${OPENSSL_VERSION}" | tr '.' '_')/ && \
     # Configure with arch-specific optimization flags
     if [ "$TARGETARCH" = "arm64" ]; then \
       # ARM64-specific configuration - don't use arch flag in emulation
-      ./config no-asm --libdir=/usr/local/lib64 --openssldir=/usr/local/ssl shared; \
+      ./config no-asm --libdir=/usr/local/lib64 --openssldir=/usr/local/ssl shared > /dev/null; \
     else \
       # AMD64-specific configuration
-      ./config -m64 --libdir=/usr/local/lib64 --openssldir=/usr/local/ssl shared; \
+      ./config -m64 --libdir=/usr/local/lib64 --openssldir=/usr/local/ssl shared > /dev/null; \
     fi && \
-    make -j$(nproc) && \
-    make install && \
+    make -j$(nproc) > /dev/null && \
+    make install > /dev/null && \
     cd .. && \
     rm -rf OpenSSL_$(echo "${OPENSSL_VERSION}" | tr '.' '_').tar.gz openssl-OpenSSL_$(echo "${OPENSSL_VERSION}" | tr '.' '_')/
 
 # Make sure OpenSSL is correctly installed and find the library files
 RUN export LD_LIBRARY_PATH=/usr/local/lib64:/usr/local/lib:/usr/lib64:/usr/lib && \
     openssl version && \
-    echo "Locating OpenSSL libraries..." && \
-    find /usr -name "libssl.so*" || echo "No libssl.so found in /usr" && \
-    find /usr/local -name "libssl.so*" || echo "No libssl.so found in /usr/local"
+    echo "Locating OpenSSL libraries..." 
 
 # Find and copy the OpenSSL library files to the binaries folder
 RUN mkdir -p /binaries/${TARGETARCH} && \
@@ -62,20 +60,21 @@ RUN mkdir -p /binaries/${TARGETARCH} && \
 
 # Download and build the GameLift Server SDK
 RUN mkdir SDK && cd SDK && \
-    wget https://gamelift-server-sdk-release.s3.us-west-2.amazonaws.com/cpp/GameLift-Cpp-ServerSDK-5.2.0.zip && \
-    unzip GameLift-Cpp-ServerSDK-5.2.0.zip && \
+    wget -q https://gamelift-server-sdk-release.s3.us-west-2.amazonaws.com/cpp/GameLift-Cpp-ServerSDK-5.2.0.zip && \
+    unzip -q GameLift-Cpp-ServerSDK-5.2.0.zip && \
     mkdir cmake-build && \
     # Configure CMake with architecture-specific flags
     if [ "$TARGETARCH" = "arm64" ]; then \
       echo "Configuring for ARM64..." && \
       # Don't use arch-specific flags in emulation
-      cmake -G "Unix Makefiles" -DBUILD_FOR_UNREAL=1 -DCMAKE_BUILD_TYPE=Release -S . -B ./cmake-build; \
+      cmake -G "Unix Makefiles" -DBUILD_FOR_UNREAL=1 -DCMAKE_BUILD_TYPE=Release -S . -B ./cmake-build > /dev/null; \
     else \
       echo "Configuring for AMD64..." && \
-      cmake -G "Unix Makefiles" -DBUILD_FOR_UNREAL=1 -DCMAKE_BUILD_TYPE=Release -S . -B ./cmake-build; \
+      cmake -G "Unix Makefiles" -DBUILD_FOR_UNREAL=1 -DCMAKE_BUILD_TYPE=Release -S . -B ./cmake-build > /dev/null; \
     fi && \
     # Build the SDK
-    cmake --build cmake-build --target all && \
+    echo "Building GameLift Server SDK..." && \
+    cmake --build cmake-build --target all > /dev/null && \
     cd ./cmake-build/prefix/ && \
     cp -r ./lib/* /binaries/${TARGETARCH}/ && \
     mkdir -p /binaries/${TARGETARCH}/include && \
@@ -85,7 +84,7 @@ RUN mkdir SDK && cd SDK && \
     rm -rf SDK
 
 # Show what we've collected in the binaries directory
-RUN ls -la /binaries/${TARGETARCH}/
+RUN echo "Build artifacts:" && ls -la /binaries/${TARGETARCH}/
 
 # Copy the binaries only to a clean setup
 FROM scratch AS server

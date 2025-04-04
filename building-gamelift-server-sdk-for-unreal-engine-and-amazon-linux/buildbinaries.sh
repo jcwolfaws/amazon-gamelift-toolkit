@@ -183,7 +183,7 @@ fi
 if [[ "$build_amd64" = true ]]; then
     echo "Building for AMD64 (x86_64) architecture..."
     mkdir -p output/amd64
-    docker buildx build --progress=plain --platform=linux/amd64 \
+    docker buildx build --progress=auto --platform=linux/amd64 \
                         --build-arg TARGETARCH=amd64 \
                         --build-arg OPENSSL_VERSION=${openssl_version} \
                         --output=type=local,dest=./output/amd64 \
@@ -192,7 +192,7 @@ if [[ "$build_amd64" = true ]]; then
     build_status=$?
     if [ $build_status -eq 0 ] && [ "$(ls -A output/amd64 2>/dev/null)" ]; then
         echo "Creating AMD64 zip file..."
-        (cd output/amd64 && zip -r ../../AL2023GameliftUE5sdk-amd64.zip ./* || echo "Warning: zip creation failed")
+        (cd output/amd64 && zip -q -r ../../AL2023GameliftUE5sdk-amd64.zip ./* > /dev/null 2>&1 || echo "Warning: zip creation failed")
     else
         echo "Error: AMD64 build failed or output directory is empty (status: $build_status)"
         # Show directory contents for debugging
@@ -209,7 +209,7 @@ if [[ "$build_arm64" = true ]]; then
     mkdir -p output/arm64
     
     echo "Starting ARM64 build - this may take a while due to emulation..."
-    docker buildx build --progress=plain --platform=linux/arm64 \
+    docker buildx build --progress=auto --platform=linux/arm64 \
                         --build-arg TARGETARCH=arm64 \
                         --build-arg OPENSSL_VERSION=${openssl_version} \
                         --output=type=local,dest=./output/arm64 \
@@ -218,7 +218,7 @@ if [[ "$build_arm64" = true ]]; then
     build_status=$?
     if [ $build_status -eq 0 ] && [ "$(ls -A output/arm64 2>/dev/null)" ]; then
         echo "Creating ARM64 zip file..."
-        (cd output/arm64 && zip -r ../../AL2023GameliftUE5sdk-arm64.zip ./* || echo "Warning: zip creation failed")
+        (cd output/arm64 && zip -q -r ../../AL2023GameliftUE5sdk-arm64.zip ./* > /dev/null 2>&1 || echo "Warning: zip creation failed")
     else
         echo "Error: ARM64 build failed or output directory is empty (status: $build_status)"
         # Show directory contents for debugging
@@ -235,11 +235,11 @@ if [[ "$build_amd64" = true && "$build_arm64" = true ]] && \
     mkdir -p combined/arm64
     
     # Extract the individual zip files to the combined directory
-    unzip -o AL2023GameliftUE5sdk-amd64.zip -d combined/amd64 || echo "Warning: Error extracting AMD64 zip"
-    unzip -o AL2023GameliftUE5sdk-arm64.zip -d combined/arm64 || echo "Warning: Error extracting ARM64 zip"
+    unzip -q -o AL2023GameliftUE5sdk-amd64.zip -d combined/amd64 > /dev/null || echo "Warning: Error extracting AMD64 zip"
+    unzip -q -o AL2023GameliftUE5sdk-arm64.zip -d combined/arm64 > /dev/null || echo "Warning: Error extracting ARM64 zip"
     
     # Create combined zip
-    (cd combined && zip -r ../AL2023GameliftUE5sdk-multiarch.zip ./* || echo "Warning: Error creating multi-arch zip")
+    (cd combined && zip -q -r ../AL2023GameliftUE5sdk-multiarch.zip ./* > /dev/null 2>&1 || echo "Warning: Error creating multi-arch zip")
 fi
 
 echo "Build process completed."
