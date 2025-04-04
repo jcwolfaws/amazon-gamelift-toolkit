@@ -42,7 +42,8 @@ setup_buildx() {
     fi
     
     # Set up QEMU for multi-architecture emulation
-    docker run --privileged --rm tonistiigi/binfmt --install all
+    echo "Installing QEMU emulation support..."
+    docker run --privileged --rm tonistiigi/binfmt --install arm64
     
     # Create a new builder instance if it doesn't exist
     if ! docker buildx inspect mybuilder &>/dev/null; then
@@ -55,6 +56,13 @@ setup_buildx() {
     docker buildx inspect --bootstrap
     
     echo "Docker buildx setup complete."
+}
+
+# Clean up Docker to free space
+cleanup_docker() {
+    echo "Cleaning Docker to free up space..."
+    docker system prune -f
+    echo "Docker cleanup complete."
 }
 
 # Prompt for Unreal Engine version
@@ -128,7 +136,7 @@ fi
 echo ""
 echo "Select which architecture(s) to build for:"
 echo "1) x86_64 (AMD64) only"
-echo "2) ARM64 only"
+echo "2) ARM64 only (Note: This uses emulation and may be slower)"
 echo "3) Both architectures (default)"
 read -p "Enter your choice [1-3] or press Enter for default: " arch_choice
 
@@ -142,15 +150,18 @@ case "$arch_choice" in
         ;;
     2)
         echo "Building for ARM64 only"
+        echo "NOTE: ARM64 builds on x86 hosts use emulation which may be slow and resource-intensive."
         build_arm64=true
         ;;
     "" | 3)
         echo "Building for both architectures"
+        echo "NOTE: ARM64 builds on x86 hosts use emulation which may be slow and resource-intensive."
         build_amd64=true
         build_arm64=true
         ;;
     *)
         echo "Invalid choice. Building for both architectures (default)"
+        echo "NOTE: ARM64 builds on x86 hosts use emulation which may be slow and resource-intensive."
         build_amd64=true
         build_arm64=true
         ;;
@@ -158,6 +169,9 @@ esac
 
 # Create output directories
 mkdir -p output
+
+# Clean up Docker to free space before starting
+cleanup_docker
 
 # Setup Docker buildx for multi-architecture builds 
 # (only needed if building for ARM64 or both architectures)
@@ -175,33 +189,40 @@ if [[ "$build_amd64" = true ]]; then
                         --output=type=local,dest=./output/amd64 \
                         --target=server .
     
-    if [ $? -eq 0 ] && [ "$(ls -A output/amd64 2>/dev/null)" ]; then
+    build_status=$?
+    if [ $build_status -eq 0 ] && [ "$(ls -A output/amd64 2>/dev/null)" ]; then
         echo "Creating AMD64 zip file..."
-        cd output/amd64
-        zip -r ../../AL2023GameliftUE5sdk-amd64.zip ./*
-        cd ../..
+        (cd output/amd64 && zip -r ../../AL2023GameliftUE5sdk-amd64.zip ./* || echo "Warning: zip creation failed")
     else
-        echo "Error: AMD64 build failed or output directory is empty"
+        echo "Error: AMD64 build failed or output directory is empty (status: $build_status)"
+        # Show directory contents for debugging
+        ls -la output/amd64
     fi
+    
+    # Clean Docker between builds to free up space
+    cleanup_docker
 fi
 
 # Build for ARM64
 if [[ "$build_arm64" = true ]]; then
-    echo "Building for ARM64 architecture..."
+    echo "Building for ARM64 architecture (via emulation)..."
     mkdir -p output/arm64
+    
+    echo "Starting ARM64 build - this may take a while due to emulation..."
     docker buildx build --progress=plain --platform=linux/arm64 \
                         --build-arg TARGETARCH=arm64 \
                         --build-arg OPENSSL_VERSION=${openssl_version} \
                         --output=type=local,dest=./output/arm64 \
                         --target=server .
     
-    if [ $? -eq 0 ] && [ "$(ls -A output/arm64 2>/dev/null)" ]; then
+    build_status=$?
+    if [ $build_status -eq 0 ] && [ "$(ls -A output/arm64 2>/dev/null)" ]; then
         echo "Creating ARM64 zip file..."
-        cd output/arm64
-        zip -r ../../AL2023GameliftUE5sdk-arm64.zip ./*
-        cd ../..
+        (cd output/arm64 && zip -r ../../AL2023GameliftUE5sdk-arm64.zip ./* || echo "Warning: zip creation failed")
     else
-        echo "Error: ARM64 build failed or output directory is empty"
+        echo "Error: ARM64 build failed or output directory is empty (status: $build_status)"
+        # Show directory contents for debugging
+        ls -la output/arm64
     fi
 fi
 
@@ -209,19 +230,21 @@ fi
 if [[ "$build_amd64" = true && "$build_arm64" = true ]] && \
    [ -f "AL2023GameliftUE5sdk-amd64.zip" ] && [ -f "AL2023GameliftUE5sdk-arm64.zip" ]; then
     echo "Creating multi-architecture package..."
+    rm -rf combined
     mkdir -p combined/amd64
     mkdir -p combined/arm64
     
     # Extract the individual zip files to the combined directory
-    unzip -o AL2023GameliftUE5sdk-amd64.zip -d combined/amd64
-    unzip -o AL2023GameliftUE5sdk-arm64.zip -d combined/arm64
+    unzip -o AL2023GameliftUE5sdk-amd64.zip -d combined/amd64 || echo "Warning: Error extracting AMD64 zip"
+    unzip -o AL2023GameliftUE5sdk-arm64.zip -d combined/arm64 || echo "Warning: Error extracting ARM64 zip"
     
-    cd combined
-    zip -r ../AL2023GameliftUE5sdk-multiarch.zip ./*
-    cd ..
+    # Create combined zip
+    (cd combined && zip -r ../AL2023GameliftUE5sdk-multiarch.zip ./* || echo "Warning: Error creating multi-arch zip")
 fi
 
-echo "Build complete! The following files are available for download:"
+echo "Build process completed."
+echo ""
+echo "The following files are available for download:"
 if [[ "$build_amd64" = true ]] && [ -f "AL2023GameliftUE5sdk-amd64.zip" ]; then
     echo "- AMD64 (x86_64) binaries: AL2023GameliftUE5sdk-amd64.zip"
 fi

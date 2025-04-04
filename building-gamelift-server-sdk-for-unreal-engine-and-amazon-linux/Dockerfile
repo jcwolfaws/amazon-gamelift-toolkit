@@ -22,8 +22,8 @@ RUN wget https://github.com/openssl/openssl/archive/refs/tags/OpenSSL_$(echo "${
     cd openssl-OpenSSL_$(echo "${OPENSSL_VERSION}" | tr '.' '_')/ && \
     # Configure with arch-specific optimization flags
     if [ "$TARGETARCH" = "arm64" ]; then \
-      # ARM64-specific configuration
-      ./config -march=armv8-a; \
+      # ARM64-specific configuration - don't use arch flag in emulation
+      ./config no-asm; \
     else \
       # AMD64-specific configuration
       ./config -m64; \
@@ -50,8 +50,8 @@ RUN mkdir SDK && cd SDK && \
     # Configure CMake with architecture-specific flags
     if [ "$TARGETARCH" = "arm64" ]; then \
       echo "Configuring for ARM64..." && \
-      cmake -G "Unix Makefiles" -DBUILD_FOR_UNREAL=1 -DCMAKE_BUILD_TYPE=Release \
-            -DCMAKE_CXX_FLAGS="-march=armv8-a" -S . -B ./cmake-build; \
+      # Don't use arch-specific flags in emulation
+      cmake -G "Unix Makefiles" -DBUILD_FOR_UNREAL=1 -DCMAKE_BUILD_TYPE=Release -S . -B ./cmake-build; \
     else \
       echo "Configuring for AMD64..." && \
       cmake -G "Unix Makefiles" -DBUILD_FOR_UNREAL=1 -DCMAKE_BUILD_TYPE=Release -S . -B ./cmake-build; \
