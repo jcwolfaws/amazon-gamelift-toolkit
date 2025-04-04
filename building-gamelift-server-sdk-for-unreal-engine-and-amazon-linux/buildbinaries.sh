@@ -2,10 +2,26 @@
 
 echo "Building the Unreal GameLift Server SDK binaries for Amazon Linux 2023..."
 
+# Start timing total build process
+build_start_time=$(date +%s)
+
 # Initialize build status trackers
 amd64_build_status=255  # Not attempted
 arm64_build_status=255  # Not attempted
 enable_caching=false    # Default: no caching to avoid using excess disk space
+
+# Function to format time duration
+format_duration() {
+    local seconds=$1
+    local minutes=$((seconds / 60))
+    local remaining_seconds=$((seconds % 60))
+    
+    if [[ $minutes -gt 0 ]]; then
+        echo "${minutes}m ${remaining_seconds}s"
+    else
+        echo "${seconds}s"
+    fi
+}
 
 # Map UE versions to OpenSSL versions
 get_openssl_version() {
@@ -262,6 +278,9 @@ if [[ "$build_amd64" = true ]]; then
     
     mkdir -p output/amd64
     
+    # Start timing
+    amd64_build_start=$(date +%s)
+    
     # For native builds, we can use regular docker build which is faster
     # For cross-architecture builds, we need to use buildx
     if [[ "$HOST_ARCH" == "x86_64" ]]; then
@@ -298,12 +317,18 @@ if [[ "$build_amd64" = true ]]; then
     fi
     
     amd64_build_status=$?
+    
+    # Calculate build duration
+    amd64_build_end=$(date +%s)
+    amd64_build_duration=$((amd64_build_end - amd64_build_start))
+    amd64_build_time=$(format_duration $amd64_build_duration)
+    
     if [ $amd64_build_status -eq 0 ] && [ "$(ls -A output/amd64 2>/dev/null)" ]; then
         echo "Creating AMD64 zip file..."
         (cd output/amd64 && zip -q -r ../../AL2023GameliftUE5sdk-amd64.zip ./* > /dev/null 2>&1 || echo "Warning: zip creation failed")
-        echo "✅ AMD64 build completed successfully"
+        echo "✅ AMD64 build completed successfully (took $amd64_build_time)"
     else
-        echo "❌ Error: AMD64 build failed or output directory is empty (status: $amd64_build_status)"
+        echo "❌ Error: AMD64 build failed or output directory is empty (status: $amd64_build_status, took $amd64_build_time)"
         # Show directory contents for debugging
         ls -la output/amd64
     fi
@@ -321,6 +346,9 @@ if [[ "$build_arm64" = true ]]; then
     fi
     
     mkdir -p output/arm64
+    
+    # Start timing
+    arm64_build_start=$(date +%s)
     
     # For native builds, we can use regular docker build which is faster
     # For cross-architecture builds, we need to use buildx
@@ -358,12 +386,18 @@ if [[ "$build_arm64" = true ]]; then
     fi
     
     arm64_build_status=$?
+    
+    # Calculate build duration
+    arm64_build_end=$(date +%s)
+    arm64_build_duration=$((arm64_build_end - arm64_build_start))
+    arm64_build_time=$(format_duration $arm64_build_duration)
+    
     if [ $arm64_build_status -eq 0 ] && [ "$(ls -A output/arm64 2>/dev/null)" ]; then
         echo "Creating ARM64 zip file..."
         (cd output/arm64 && zip -q -r ../../AL2023GameliftUE5sdk-arm64.zip ./* > /dev/null 2>&1 || echo "Warning: zip creation failed")
-        echo "✅ ARM64 build completed successfully"
+        echo "✅ ARM64 build completed successfully (took $arm64_build_time)"
     else
-        echo "❌ Error: ARM64 build failed or output directory is empty (status: $arm64_build_status)"
+        echo "❌ Error: ARM64 build failed or output directory is empty (status: $arm64_build_status, took $arm64_build_time)"
         # Show directory contents for debugging
         ls -la output/arm64
     fi
@@ -395,17 +429,17 @@ echo "========================================================================"
 # Report status of each build
 if [[ "$build_amd64" = true ]]; then
     if [ $amd64_build_status -eq 0 ] && [ -f "AL2023GameliftUE5sdk-amd64.zip" ]; then
-        echo "✅ AMD64 (x86_64) build: SUCCESS"
+        echo "✅ AMD64 (x86_64) build: SUCCESS (took $amd64_build_time)"
     else
-        echo "❌ AMD64 (x86_64) build: FAILED (status: $amd64_build_status)"
+        echo "❌ AMD64 (x86_64) build: FAILED (status: $amd64_build_status, took $amd64_build_time)"
     fi
 fi
 
 if [[ "$build_arm64" = true ]]; then
     if [ $arm64_build_status -eq 0 ] && [ -f "AL2023GameliftUE5sdk-arm64.zip" ]; then
-        echo "✅ ARM64 build: SUCCESS"
+        echo "✅ ARM64 build: SUCCESS (took $arm64_build_time)"
     else
-        echo "❌ ARM64 build: FAILED (status: $arm64_build_status)"
+        echo "❌ ARM64 build: FAILED (status: $arm64_build_status, took $arm64_build_time)"
     fi
 fi
 
@@ -439,3 +473,10 @@ if [[ "$enable_caching" == "true" ]]; then
     echo "NOTE: Docker caching was enabled for this build. If you need to free up disk space"
     echo "      after the build is complete, you can run 'docker system prune' manually."
 fi
+
+# Calculate and display total build time
+build_end_time=$(date +%s)
+total_build_duration=$((build_end_time - build_start_time))
+total_build_time=$(format_duration $total_build_duration)
+echo ""
+echo "Total build process time: $total_build_time"
