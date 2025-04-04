@@ -5,6 +5,7 @@ echo "Building the Unreal GameLift Server SDK binaries for Amazon Linux 2023..."
 # Initialize build status trackers
 amd64_build_status=255  # Not attempted
 arm64_build_status=255  # Not attempted
+enable_caching=false    # Default: no caching to avoid using excess disk space
 
 # Map UE versions to OpenSSL versions
 get_openssl_version() {
@@ -86,15 +87,6 @@ setup_buildx() {
     docker buildx inspect --bootstrap
     
     echo "Docker buildx setup complete."
-}
-
-# Clean up Docker to free space
-cleanup_docker() {
-    echo "Cleaning Docker to free up space..."
-    # Use a more selective pruning approach to preserve build cache
-    docker container prune -f
-    docker image prune -f --filter "until=24h"
-    echo "Docker cleanup complete."
 }
 
 # Prompt for Unreal Engine version
@@ -222,13 +214,30 @@ case "$arch_choice" in
         ;;
 esac
 
+# Ask about Docker caching
+echo ""
+echo "Enable Docker caching?"
+echo "Caching can speed up subsequent builds but uses more disk space."
+echo "1) No caching (default, recommended for one-time builds)"
+echo "2) Enable caching (faster for repeated builds)"
+read -p "Enter your choice [1-2] or press Enter for default: " cache_choice
+
+case "$cache_choice" in
+    2)
+        echo "Docker caching enabled for faster repeated builds."
+        enable_caching=true
+        ;;
+    * | "")
+        echo "Docker caching disabled (default)."
+        enable_caching=false
+        ;;
+esac
+
 # Create output directories
 mkdir -p output
-# Create cache directories
-mkdir -p /tmp/amd64-cache /tmp/arm64-cache
 
-# Clean up Docker to free space before starting
-cleanup_docker
+# We don't create cache directories in /tmp anymore as they could interfere with other processes
+# or be removed unexpectedly by the system
 
 # Setup Docker buildx for multi-architecture builds 
 # (only needed if building for cross-architecture)
@@ -256,20 +265,36 @@ if [[ "$build_amd64" = true ]]; then
     # For native builds, we can use regular docker build which is faster
     # For cross-architecture builds, we need to use buildx
     if [[ "$HOST_ARCH" == "x86_64" ]]; then
-        docker build --progress=auto \
+        if [[ "$enable_caching" == "true" ]]; then
+            docker build --progress=auto \
                      --build-arg TARGETARCH=amd64 \
                      --build-arg OPENSSL_VERSION=${openssl_version} \
                      --output=type=local,dest=./output/amd64 \
                      --target=server .
+        else
+            docker build --progress=auto \
+                     --build-arg TARGETARCH=amd64 \
+                     --build-arg OPENSSL_VERSION=${openssl_version} \
+                     --output=type=local,dest=./output/amd64 \
+                     --no-cache \
+                     --target=server .
+        fi
     else
-        # Use cache-from and cache-to for better caching with buildx
-        docker buildx build --progress=auto --platform=linux/amd64 \
+        # Use buildx for cross-platform builds
+        if [[ "$enable_caching" == "true" ]]; then
+            docker buildx build --progress=auto --platform=linux/amd64 \
                          --build-arg TARGETARCH=amd64 \
                          --build-arg OPENSSL_VERSION=${openssl_version} \
                          --output=type=local,dest=./output/amd64 \
-                         --cache-from=type=local,src=/tmp/amd64-cache \
-                         --cache-to=type=local,dest=/tmp/amd64-cache,mode=max \
                          --target=server .
+        else
+            docker buildx build --progress=auto --platform=linux/amd64 \
+                         --build-arg TARGETARCH=amd64 \
+                         --build-arg OPENSSL_VERSION=${openssl_version} \
+                         --output=type=local,dest=./output/amd64 \
+                         --no-cache \
+                         --target=server .
+        fi
     fi
     
     amd64_build_status=$?
@@ -283,8 +308,8 @@ if [[ "$build_amd64" = true ]]; then
         ls -la output/amd64
     fi
     
-    # Don't clean Docker between builds to preserve cache
-    # cleanup_docker
+    # Don't clean Docker between builds to preserve cache and avoid
+    # inadvertently affecting other Docker resources on the system
 fi
 
 # Build for ARM64
@@ -300,20 +325,36 @@ if [[ "$build_arm64" = true ]]; then
     # For native builds, we can use regular docker build which is faster
     # For cross-architecture builds, we need to use buildx
     if [[ "$HOST_ARCH" == "arm64" ]]; then
-        docker build --progress=auto \
+        if [[ "$enable_caching" == "true" ]]; then
+            docker build --progress=auto \
                      --build-arg TARGETARCH=arm64 \
                      --build-arg OPENSSL_VERSION=${openssl_version} \
                      --output=type=local,dest=./output/arm64 \
                      --target=server .
+        else
+            docker build --progress=auto \
+                     --build-arg TARGETARCH=arm64 \
+                     --build-arg OPENSSL_VERSION=${openssl_version} \
+                     --output=type=local,dest=./output/arm64 \
+                     --no-cache \
+                     --target=server .
+        fi
     else
-        # Use cache-from and cache-to for better caching with buildx
-        docker buildx build --progress=auto --platform=linux/arm64 \
+        # Use buildx for cross-platform builds
+        if [[ "$enable_caching" == "true" ]]; then
+            docker buildx build --progress=auto --platform=linux/arm64 \
                          --build-arg TARGETARCH=arm64 \
                          --build-arg OPENSSL_VERSION=${openssl_version} \
                          --output=type=local,dest=./output/arm64 \
-                         --cache-from=type=local,src=/tmp/arm64-cache \
-                         --cache-to=type=local,dest=/tmp/arm64-cache,mode=max \
                          --target=server .
+        else
+            docker buildx build --progress=auto --platform=linux/arm64 \
+                         --build-arg TARGETARCH=arm64 \
+                         --build-arg OPENSSL_VERSION=${openssl_version} \
+                         --output=type=local,dest=./output/arm64 \
+                         --no-cache \
+                         --target=server .
+        fi
     fi
     
     arm64_build_status=$?
@@ -327,8 +368,8 @@ if [[ "$build_arm64" = true ]]; then
         ls -la output/arm64
     fi
     
-    # Optional: clean up after all builds are complete
-    # cleanup_docker
+    # We're not cleaning up after builds to avoid affecting other Docker resources
+    # Users can manually clean up if needed after the build completes
 fi
 
 # Create a combined zip file with both architectures if both were successfully built
@@ -392,3 +433,9 @@ fi
 echo ""
 echo "If on CloudShell, select Actions -> Download File and type the full path to download the binaries."
 echo "For example: /home/cloudshell-user/amazon-gamelift-toolkit/building-gamelift-server-sdk-for-unreal-engine-and-amazon-linux/AL2023GameliftUE5sdk-multiarch.zip"
+
+echo ""
+if [[ "$enable_caching" == "true" ]]; then
+    echo "NOTE: Docker caching was enabled for this build. If you need to free up disk space"
+    echo "      after the build is complete, you can run 'docker system prune' manually."
+fi
