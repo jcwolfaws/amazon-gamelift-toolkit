@@ -8,7 +8,7 @@ ARG OPENSSL_VERSION=1.1.1n
 
 # Install only the essential dependencies with minimal extras
 RUN yum install -y --setopt=install_weak_deps=False \
-    gcc-c++ cmake3 git wget openssl-devel tar perl sudo \
+    gcc-c++ cmake3 git wget openssl-devel tar perl sudo findutils \
     && yum clean all \
     && rm -rf /var/cache/yum
 
@@ -23,24 +23,42 @@ RUN wget https://github.com/openssl/openssl/archive/refs/tags/OpenSSL_$(echo "${
     # Configure with arch-specific optimization flags
     if [ "$TARGETARCH" = "arm64" ]; then \
       # ARM64-specific configuration - don't use arch flag in emulation
-      ./config no-asm; \
+      ./config no-asm --libdir=/usr/local/lib64 --openssldir=/usr/local/ssl shared; \
     else \
       # AMD64-specific configuration
-      ./config -m64; \
+      ./config -m64 --libdir=/usr/local/lib64 --openssldir=/usr/local/ssl shared; \
     fi && \
     make -j$(nproc) && \
     make install && \
     cd .. && \
     rm -rf OpenSSL_$(echo "${OPENSSL_VERSION}" | tr '.' '_').tar.gz openssl-OpenSSL_$(echo "${OPENSSL_VERSION}" | tr '.' '_')/
 
-# Make sure OpenSSL is correctly installed
-RUN export LD_LIBRARY_PATH=/usr/local/lib:/usr/local/lib64 && \
-    openssl version
+# Make sure OpenSSL is correctly installed and find the library files
+RUN export LD_LIBRARY_PATH=/usr/local/lib64:/usr/local/lib:/usr/lib64:/usr/lib && \
+    openssl version && \
+    echo "Locating OpenSSL libraries..." && \
+    find /usr -name "libssl.so*" || echo "No libssl.so found in /usr" && \
+    find /usr/local -name "libssl.so*" || echo "No libssl.so found in /usr/local"
 
-# Copy the Open SSL files to binaries folder
+# Find and copy the OpenSSL library files to the binaries folder
 RUN mkdir -p /binaries/${TARGETARCH} && \
-    cp /usr/local/lib/libssl.so.1.1 /binaries/${TARGETARCH}/ && \
-    cp /usr/local/lib/libcrypto.so.1.1 /binaries/${TARGETARCH}/
+    (if [ -f /usr/local/lib64/libssl.so.1.1 ]; then \
+        echo "Found OpenSSL in /usr/local/lib64" && \
+        cp /usr/local/lib64/libssl.so.1.1 /binaries/${TARGETARCH}/ && \
+        cp /usr/local/lib64/libcrypto.so.1.1 /binaries/${TARGETARCH}/; \
+    elif [ -f /usr/local/lib/libssl.so.1.1 ]; then \
+        echo "Found OpenSSL in /usr/local/lib" && \
+        cp /usr/local/lib/libssl.so.1.1 /binaries/${TARGETARCH}/ && \
+        cp /usr/local/lib/libcrypto.so.1.1 /binaries/${TARGETARCH}/; \
+    elif [ -f /usr/lib64/libssl.so.1.1 ]; then \
+        echo "Found OpenSSL in /usr/lib64" && \
+        cp /usr/lib64/libssl.so.1.1 /binaries/${TARGETARCH}/ && \
+        cp /usr/lib64/libcrypto.so.1.1 /binaries/${TARGETARCH}/; \
+    else \
+        echo "WARNING: OpenSSL libraries not found in standard locations." && \
+        find / -name "libssl.so.1.1" -o -name "libcrypto.so.1.1" 2>/dev/null | xargs -r cp -t /binaries/${TARGETARCH}/ || \
+        echo "ERROR: Could not find OpenSSL libraries to copy."; \
+    fi)
 
 # Download and build the GameLift Server SDK
 RUN mkdir SDK && cd SDK && \
@@ -65,6 +83,9 @@ RUN mkdir SDK && cd SDK && \
     # Clean up to save space
     cd ../../.. && \
     rm -rf SDK
+
+# Show what we've collected in the binaries directory
+RUN ls -la /binaries/${TARGETARCH}/
 
 # Copy the binaries only to a clean setup
 FROM scratch AS server
