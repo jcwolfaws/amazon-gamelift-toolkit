@@ -31,6 +31,26 @@ get_openssl_version() {
     esac
 }
 
+# Detect host system architecture
+detect_host_architecture() {
+    # Get system architecture
+    local arch=$(uname -m)
+    
+    if [[ "$arch" == "x86_64" ]]; then
+        echo "x86_64"
+    elif [[ "$arch" == "aarch64" || "$arch" == "arm64" ]]; then
+        echo "arm64"
+    else
+        echo "Unknown architecture: $arch"
+        echo "This script is designed for x86_64 or arm64 hosts. Assuming x86_64..."
+        echo "x86_64"
+    fi
+}
+
+# Get host architecture
+HOST_ARCH=$(detect_host_architecture)
+echo "Detected host architecture: $HOST_ARCH"
+
 # Setup Docker buildx for multi-architecture builds
 setup_buildx() {
     echo "Setting up Docker buildx for multi-architecture builds..."
@@ -41,9 +61,15 @@ setup_buildx() {
         exit 1
     fi
     
-    # Set up QEMU for multi-architecture emulation
-    echo "Installing QEMU emulation support..."
-    docker run --privileged --rm tonistiigi/binfmt --install arm64
+    # Set up QEMU for cross-architecture emulation
+    # Only install emulation for architectures different from the host
+    if [[ "$HOST_ARCH" == "x86_64" && "$build_arm64" == "true" ]]; then
+        echo "Installing QEMU emulation support for ARM64..."
+        docker run --privileged --rm tonistiigi/binfmt --install arm64
+    elif [[ "$HOST_ARCH" == "arm64" && "$build_amd64" == "true" ]]; then
+        echo "Installing QEMU emulation support for AMD64..."
+        docker run --privileged --rm tonistiigi/binfmt --install amd64
+    fi
     
     # Create a new builder instance if it doesn't exist
     if ! docker buildx inspect mybuilder &>/dev/null; then
@@ -136,8 +162,21 @@ fi
 echo ""
 echo "Select which architecture(s) to build for:"
 echo "1) x86_64 (AMD64) only"
-echo "2) ARM64 only (Note: This uses emulation and may be slower)"
+echo "2) ARM64 only"
 echo "3) Both architectures (default)"
+
+# Display recommendations based on host architecture
+if [[ "$HOST_ARCH" == "arm64" ]]; then
+    echo ""
+    echo "NOTE: You are running on an ARM64 host. Building for ARM64 will be native (fast),"
+    echo "      but building for x86_64 will require emulation (slower)."
+    echo "      For best performance, consider building only for ARM64 on this host."
+elif [[ "$HOST_ARCH" == "x86_64" ]]; then
+    echo ""
+    echo "NOTE: You are running on an x86_64 host. Building for x86_64 will be native (fast),"
+    echo "      but building for ARM64 will require emulation (slower)."
+fi
+
 read -p "Enter your choice [1-3] or press Enter for default: " arch_choice
 
 # Set flags based on user choice
@@ -150,18 +189,28 @@ case "$arch_choice" in
         ;;
     2)
         echo "Building for ARM64 only"
-        echo "NOTE: ARM64 builds on x86 hosts use emulation which may be slow and resource-intensive."
+        if [[ "$HOST_ARCH" != "arm64" ]]; then
+            echo "NOTE: ARM64 builds on x86_64 hosts use emulation which may be slow and resource-intensive."
+        fi
         build_arm64=true
         ;;
     "" | 3)
         echo "Building for both architectures"
-        echo "NOTE: ARM64 builds on x86 hosts use emulation which may be slow and resource-intensive."
+        if [[ "$HOST_ARCH" == "arm64" ]]; then
+            echo "NOTE: x86_64 builds on ARM64 hosts use emulation which may be slow and resource-intensive."
+        elif [[ "$HOST_ARCH" == "x86_64" ]]; then
+            echo "NOTE: ARM64 builds on x86_64 hosts use emulation which may be slow and resource-intensive."
+        fi
         build_amd64=true
         build_arm64=true
         ;;
     *)
         echo "Invalid choice. Building for both architectures (default)"
-        echo "NOTE: ARM64 builds on x86 hosts use emulation which may be slow and resource-intensive."
+        if [[ "$HOST_ARCH" == "arm64" ]]; then
+            echo "NOTE: x86_64 builds on ARM64 hosts use emulation which may be slow and resource-intensive."
+        elif [[ "$HOST_ARCH" == "x86_64" ]]; then
+            echo "NOTE: ARM64 builds on x86_64 hosts use emulation which may be slow and resource-intensive."
+        fi
         build_amd64=true
         build_arm64=true
         ;;
@@ -174,20 +223,43 @@ mkdir -p output
 cleanup_docker
 
 # Setup Docker buildx for multi-architecture builds 
-# (only needed if building for ARM64 or both architectures)
-if [[ "$build_arm64" = true ]]; then
+# (only needed if building for cross-architecture)
+need_buildx=false
+if [[ "$HOST_ARCH" == "x86_64" && "$build_arm64" == "true" ]]; then
+    need_buildx=true
+elif [[ "$HOST_ARCH" == "arm64" && "$build_amd64" == "true" ]]; then
+    need_buildx=true
+fi
+
+if [[ "$need_buildx" == "true" ]]; then
     setup_buildx
 fi
 
 # Build for AMD64 (x86_64)
 if [[ "$build_amd64" = true ]]; then
-    echo "Building for AMD64 (x86_64) architecture..."
+    if [[ "$HOST_ARCH" == "x86_64" ]]; then
+        echo "Building for AMD64 (x86_64) architecture (native build)..."
+    else
+        echo "Building for AMD64 (x86_64) architecture via emulation (this may take a while)..."
+    fi
+    
     mkdir -p output/amd64
-    docker buildx build --progress=auto --platform=linux/amd64 \
-                        --build-arg TARGETARCH=amd64 \
-                        --build-arg OPENSSL_VERSION=${openssl_version} \
-                        --output=type=local,dest=./output/amd64 \
-                        --target=server .
+    
+    # For native builds, we can use regular docker build which is faster
+    # For cross-architecture builds, we need to use buildx
+    if [[ "$HOST_ARCH" == "x86_64" ]]; then
+        docker build --progress=auto \
+                     --build-arg TARGETARCH=amd64 \
+                     --build-arg OPENSSL_VERSION=${openssl_version} \
+                     --output=type=local,dest=./output/amd64 \
+                     --target=server .
+    else
+        docker buildx build --progress=auto --platform=linux/amd64 \
+                         --build-arg TARGETARCH=amd64 \
+                         --build-arg OPENSSL_VERSION=${openssl_version} \
+                         --output=type=local,dest=./output/amd64 \
+                         --target=server .
+    fi
     
     build_status=$?
     if [ $build_status -eq 0 ] && [ "$(ls -A output/amd64 2>/dev/null)" ]; then
@@ -205,15 +277,29 @@ fi
 
 # Build for ARM64
 if [[ "$build_arm64" = true ]]; then
-    echo "Building for ARM64 architecture (via emulation)..."
+    if [[ "$HOST_ARCH" == "arm64" ]]; then
+        echo "Building for ARM64 architecture (native build)..."
+    else
+        echo "Building for ARM64 architecture via emulation (this may take a while)..."
+    fi
+    
     mkdir -p output/arm64
     
-    echo "Starting ARM64 build - this may take a while due to emulation..."
-    docker buildx build --progress=auto --platform=linux/arm64 \
-                        --build-arg TARGETARCH=arm64 \
-                        --build-arg OPENSSL_VERSION=${openssl_version} \
-                        --output=type=local,dest=./output/arm64 \
-                        --target=server .
+    # For native builds, we can use regular docker build which is faster
+    # For cross-architecture builds, we need to use buildx
+    if [[ "$HOST_ARCH" == "arm64" ]]; then
+        docker build --progress=auto \
+                     --build-arg TARGETARCH=arm64 \
+                     --build-arg OPENSSL_VERSION=${openssl_version} \
+                     --output=type=local,dest=./output/arm64 \
+                     --target=server .
+    else
+        docker buildx build --progress=auto --platform=linux/arm64 \
+                         --build-arg TARGETARCH=arm64 \
+                         --build-arg OPENSSL_VERSION=${openssl_version} \
+                         --output=type=local,dest=./output/arm64 \
+                         --target=server .
+    fi
     
     build_status=$?
     if [ $build_status -eq 0 ] && [ "$(ls -A output/arm64 2>/dev/null)" ]; then
