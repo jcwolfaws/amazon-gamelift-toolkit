@@ -12,6 +12,11 @@ RUN yum install -y -q --setopt=install_weak_deps=False \
     && yum clean all -q \
     && rm -rf /var/cache/yum
 
+# Debug architecture information
+RUN echo "BUILDPLATFORM: ${BUILDPLATFORM}" && \
+    echo "TARGETARCH: ${TARGETARCH}" && \
+    uname -a
+
 # Format OpenSSL version string for download URL
 RUN echo "Configuring OpenSSL version ${OPENSSL_VERSION}" && \
     OPENSSL_FORMAT_VERSION=$(echo "${OPENSSL_VERSION}" | tr '.' '_')
@@ -21,10 +26,12 @@ RUN wget -q https://github.com/openssl/openssl/archive/refs/tags/OpenSSL_$(echo 
     tar -xzf OpenSSL_$(echo "${OPENSSL_VERSION}" | tr '.' '_').tar.gz && \
     cd openssl-OpenSSL_$(echo "${OPENSSL_VERSION}" | tr '.' '_')/ && \
     # Configure with arch-specific optimization flags
-    if [ "$TARGETARCH" = "arm64" ]; then \
+    if [ "$(uname -m)" = "aarch64" ] || [ "$TARGETARCH" = "arm64" ]; then \
+      echo "Detected ARM architecture - using ARM64 configuration" && \
       # ARM64-specific configuration - don't use arch flag in emulation
       ./config no-asm --libdir=/usr/local/lib64 --openssldir=/usr/local/ssl shared > /dev/null; \
     else \
+      echo "Using AMD64 configuration" && \
       # AMD64-specific configuration
       ./config -m64 --libdir=/usr/local/lib64 --openssldir=/usr/local/ssl shared > /dev/null; \
     fi && \
@@ -64,12 +71,12 @@ RUN mkdir SDK && cd SDK && \
     unzip -q GameLift-Cpp-ServerSDK-5.2.0.zip && \
     mkdir cmake-build && \
     # Configure CMake with architecture-specific flags
-    if [ "$TARGETARCH" = "arm64" ]; then \
-      echo "Configuring for ARM64..." && \
+    if [ "$(uname -m)" = "aarch64" ] || [ "$TARGETARCH" = "arm64" ]; then \
+      echo "Configuring GameLift SDK for ARM64..." && \
       # Don't use arch-specific flags in emulation
       cmake -G "Unix Makefiles" -DBUILD_FOR_UNREAL=1 -DCMAKE_BUILD_TYPE=Release -S . -B ./cmake-build > /dev/null; \
     else \
-      echo "Configuring for AMD64..." && \
+      echo "Configuring GameLift SDK for AMD64..." && \
       cmake -G "Unix Makefiles" -DBUILD_FOR_UNREAL=1 -DCMAKE_BUILD_TYPE=Release -S . -B ./cmake-build > /dev/null; \
     fi && \
     # Build the SDK
