@@ -2,6 +2,10 @@
 
 echo "Building the Unreal GameLift Server SDK binaries for Amazon Linux 2023..."
 
+# Initialize build status trackers
+amd64_build_status=255  # Not attempted
+arm64_build_status=255  # Not attempted
+
 # Map UE versions to OpenSSL versions
 get_openssl_version() {
     local ue_version=$1
@@ -261,12 +265,13 @@ if [[ "$build_amd64" = true ]]; then
                          --target=server .
     fi
     
-    build_status=$?
-    if [ $build_status -eq 0 ] && [ "$(ls -A output/amd64 2>/dev/null)" ]; then
+    amd64_build_status=$?
+    if [ $amd64_build_status -eq 0 ] && [ "$(ls -A output/amd64 2>/dev/null)" ]; then
         echo "Creating AMD64 zip file..."
         (cd output/amd64 && zip -q -r ../../AL2023GameliftUE5sdk-amd64.zip ./* > /dev/null 2>&1 || echo "Warning: zip creation failed")
+        echo "✅ AMD64 build completed successfully"
     else
-        echo "Error: AMD64 build failed or output directory is empty (status: $build_status)"
+        echo "❌ Error: AMD64 build failed or output directory is empty (status: $amd64_build_status)"
         # Show directory contents for debugging
         ls -la output/amd64
     fi
@@ -301,20 +306,20 @@ if [[ "$build_arm64" = true ]]; then
                          --target=server .
     fi
     
-    build_status=$?
-    if [ $build_status -eq 0 ] && [ "$(ls -A output/arm64 2>/dev/null)" ]; then
+    arm64_build_status=$?
+    if [ $arm64_build_status -eq 0 ] && [ "$(ls -A output/arm64 2>/dev/null)" ]; then
         echo "Creating ARM64 zip file..."
         (cd output/arm64 && zip -q -r ../../AL2023GameliftUE5sdk-arm64.zip ./* > /dev/null 2>&1 || echo "Warning: zip creation failed")
+        echo "✅ ARM64 build completed successfully"
     else
-        echo "Error: ARM64 build failed or output directory is empty (status: $build_status)"
+        echo "❌ Error: ARM64 build failed or output directory is empty (status: $arm64_build_status)"
         # Show directory contents for debugging
         ls -la output/arm64
     fi
 fi
 
-# Create a combined zip file with both architectures if both were built
-if [[ "$build_amd64" = true && "$build_arm64" = true ]] && \
-   [ -f "AL2023GameliftUE5sdk-amd64.zip" ] && [ -f "AL2023GameliftUE5sdk-arm64.zip" ]; then
+# Create a combined zip file with both architectures if both were successfully built
+if [ -f "AL2023GameliftUE5sdk-amd64.zip" ] && [ -f "AL2023GameliftUE5sdk-arm64.zip" ]; then
     echo "Creating multi-architecture package..."
     rm -rf combined
     mkdir -p combined/amd64
@@ -328,16 +333,46 @@ if [[ "$build_amd64" = true && "$build_arm64" = true ]] && \
     (cd combined && zip -q -r ../AL2023GameliftUE5sdk-multiarch.zip ./* > /dev/null 2>&1 || echo "Warning: Error creating multi-arch zip")
 fi
 
-echo "Build process completed."
+echo ""
+echo "========================================================================"
+echo "                          BUILD RESULTS"
+echo "========================================================================"
+
+# Report status of each build
+if [[ "$build_amd64" = true ]]; then
+    if [ $amd64_build_status -eq 0 ] && [ -f "AL2023GameliftUE5sdk-amd64.zip" ]; then
+        echo "✅ AMD64 (x86_64) build: SUCCESS"
+    else
+        echo "❌ AMD64 (x86_64) build: FAILED (status: $amd64_build_status)"
+    fi
+fi
+
+if [[ "$build_arm64" = true ]]; then
+    if [ $arm64_build_status -eq 0 ] && [ -f "AL2023GameliftUE5sdk-arm64.zip" ]; then
+        echo "✅ ARM64 build: SUCCESS"
+    else
+        echo "❌ ARM64 build: FAILED (status: $arm64_build_status)"
+    fi
+fi
+
+# Multi-arch package status
+if [[ "$build_amd64" = true && "$build_arm64" = true ]]; then
+    if [ -f "AL2023GameliftUE5sdk-multiarch.zip" ]; then
+        echo "✅ Multi-architecture package: SUCCESS"
+    else
+        echo "❌ Multi-architecture package: NOT CREATED (requires both architectures to succeed)"
+    fi
+fi
+
 echo ""
 echo "The following files are available for download:"
-if [[ "$build_amd64" = true ]] && [ -f "AL2023GameliftUE5sdk-amd64.zip" ]; then
+if [ -f "AL2023GameliftUE5sdk-amd64.zip" ]; then
     echo "- AMD64 (x86_64) binaries: AL2023GameliftUE5sdk-amd64.zip"
 fi
-if [[ "$build_arm64" = true ]] && [ -f "AL2023GameliftUE5sdk-arm64.zip" ]; then
+if [ -f "AL2023GameliftUE5sdk-arm64.zip" ]; then
     echo "- ARM64 binaries: AL2023GameliftUE5sdk-arm64.zip"
 fi
-if [[ "$build_amd64" = true && "$build_arm64" = true ]] && [ -f "AL2023GameliftUE5sdk-multiarch.zip" ]; then
+if [ -f "AL2023GameliftUE5sdk-multiarch.zip" ]; then
     echo "- Multi-architecture package: AL2023GameliftUE5sdk-multiarch.zip"
 fi
 
