@@ -75,6 +75,18 @@ You can find the exact OpenSSL version used by your Unreal Engine installation b
 
 Using an incompatible OpenSSL version can lead to runtime crashes or networking failures in your game.
 
+## Finding Your OpenSSL Version
+
+If you need to verify the exact OpenSSL version used by your Unreal Engine installation:
+
+1. Navigate to your Unreal Engine installation directory
+2. Look in the `Engine/Source/ThirdParty/OpenSSL` directory
+3. The OpenSSL version is encoded in the folder name:
+   - For example, a folder named `OpenSSL_1_1_1n` indicates OpenSSL version 1.1.1n for UE 5.2.0
+   - The format is generally `OpenSSL_X_Y_Z[letter]` where X.Y.Z[letter] is the OpenSSL version
+
+Select the corresponding version when prompted by the build script to ensure compatibility.
+
 # Building the SDK
 
 **Open** the AWS Management Console, and make sure your region is N.Virginia for this example. Then launch AWS CloudShell:
