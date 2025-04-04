@@ -73,10 +73,16 @@ RUN mkdir SDK && cd SDK && \
     # Configure CMake with architecture-specific flags
     if [ "$(uname -m)" = "aarch64" ] || [ "$TARGETARCH" = "arm64" ]; then \
       echo "Configuring GameLift SDK for ARM64..." && \
-      # Don't use arch-specific flags in emulation
+      # Architecture-specific flags are intentionally omitted here because:
+      # 1. CMake automatically detects the architecture from the environment
+      # 2. Docker buildx with platform flags already handles the architecture targeting
+      # 3. Adding explicit arch flags in emulation can conflict with Docker's emulation layer
+      # 4. The GameLift SDK's CMake is already designed to handle cross-compilation
       cmake -G "Unix Makefiles" -DBUILD_FOR_UNREAL=1 -DCMAKE_BUILD_TYPE=Release -S . -B ./cmake-build > /dev/null; \
     else \
       echo "Configuring GameLift SDK for AMD64..." && \
+      # Same CMake command for both architectures - relying on automatic detection
+      # rather than explicit architecture flags for better cross-platform compatibility
       cmake -G "Unix Makefiles" -DBUILD_FOR_UNREAL=1 -DCMAKE_BUILD_TYPE=Release -S . -B ./cmake-build > /dev/null; \
     fi && \
     # Build the SDK
