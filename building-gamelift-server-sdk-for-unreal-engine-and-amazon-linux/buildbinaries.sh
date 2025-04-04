@@ -91,7 +91,9 @@ setup_buildx() {
 # Clean up Docker to free space
 cleanup_docker() {
     echo "Cleaning Docker to free up space..."
-    docker system prune -f
+    # Use a more selective pruning approach to preserve build cache
+    docker container prune -f
+    docker image prune -f --filter "until=24h"
     echo "Docker cleanup complete."
 }
 
@@ -222,6 +224,8 @@ esac
 
 # Create output directories
 mkdir -p output
+# Create cache directories
+mkdir -p /tmp/amd64-cache /tmp/arm64-cache
 
 # Clean up Docker to free space before starting
 cleanup_docker
@@ -258,10 +262,13 @@ if [[ "$build_amd64" = true ]]; then
                      --output=type=local,dest=./output/amd64 \
                      --target=server .
     else
+        # Use cache-from and cache-to for better caching with buildx
         docker buildx build --progress=auto --platform=linux/amd64 \
                          --build-arg TARGETARCH=amd64 \
                          --build-arg OPENSSL_VERSION=${openssl_version} \
                          --output=type=local,dest=./output/amd64 \
+                         --cache-from=type=local,src=/tmp/amd64-cache \
+                         --cache-to=type=local,dest=/tmp/amd64-cache,mode=max \
                          --target=server .
     fi
     
@@ -276,8 +283,8 @@ if [[ "$build_amd64" = true ]]; then
         ls -la output/amd64
     fi
     
-    # Clean Docker between builds to free up space
-    cleanup_docker
+    # Don't clean Docker between builds to preserve cache
+    # cleanup_docker
 fi
 
 # Build for ARM64
@@ -299,10 +306,13 @@ if [[ "$build_arm64" = true ]]; then
                      --output=type=local,dest=./output/arm64 \
                      --target=server .
     else
+        # Use cache-from and cache-to for better caching with buildx
         docker buildx build --progress=auto --platform=linux/arm64 \
                          --build-arg TARGETARCH=arm64 \
                          --build-arg OPENSSL_VERSION=${openssl_version} \
                          --output=type=local,dest=./output/arm64 \
+                         --cache-from=type=local,src=/tmp/arm64-cache \
+                         --cache-to=type=local,dest=/tmp/arm64-cache,mode=max \
                          --target=server .
     fi
     
@@ -316,6 +326,9 @@ if [[ "$build_arm64" = true ]]; then
         # Show directory contents for debugging
         ls -la output/arm64
     fi
+    
+    # Optional: clean up after all builds are complete
+    # cleanup_docker
 fi
 
 # Create a combined zip file with both architectures if both were successfully built
