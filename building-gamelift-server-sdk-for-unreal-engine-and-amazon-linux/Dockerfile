@@ -1,4 +1,4 @@
-FROM --platform=$BUILDPLATFORM amazonlinux:2023 as build-server
+FROM --platform=$BUILDPLATFORM amazonlinux:2023 AS build-server
 
 # Set architecture as build arg with default to amd64
 ARG TARGETARCH=amd64
