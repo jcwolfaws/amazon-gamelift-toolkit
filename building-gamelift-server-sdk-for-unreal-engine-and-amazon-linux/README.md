@@ -11,9 +11,60 @@ This sample consists of a deployment script and a configuration file:
 * **`Dockerfile`**: The dockerfile that builds the GameLift Server SDK and OpenSSL on Amazon Linux
 * **`buildbinaries.sh`**: A simple shell script that executes the docker file and creates a zip-file with the binaries
 
+# Architectures Supported
+
+The build script supports both x86_64 (AMD64) and ARM64 architectures, producing the following output files:
+
+* **`AL2023GameliftUE5sdk-amd64.zip`**: Contains the x86_64 binaries
+* **`AL2023GameliftUE5sdk-arm64.zip`**: Contains the ARM64 binaries
+* **`AL2023GameliftUE5sdk-multiarch.zip`**: Contains both architectures organized in separate folders
+
+# Interactive Prompt Features
+
+The build script provides interactive prompts to customize your build:
+
+## 1. Unreal Engine Version Selection
+
+You'll be prompted to select your Unreal Engine version:
+```
+Select your Unreal Engine version:
+1) UE 5.0
+2) UE 5.1
+3) UE 5.2
+4) UE 5.3
+5) UE 5.4
+6) UE 5.5
+7) Other (specify custom OpenSSL version)
+```
+
+This selection automatically determines the appropriate OpenSSL version for your Unreal Engine version:
+- UE 5.0: OpenSSL 1.1.1l
+- UE 5.1: OpenSSL 1.1.1n
+- UE 5.2: OpenSSL 1.1.1n
+- UE 5.3: OpenSSL 1.1.1t
+- UE 5.4: OpenSSL 1.1.1t
+- UE 5.5: OpenSSL 1.1.1t
+- Other: You can specify a custom OpenSSL version (e.g., 1.1.1k, 1.1.1q)
+
+## 2. Architecture Selection
+
+The script will then ask which architecture(s) you want to build for:
+```
+Select which architecture(s) to build for:
+1) x86_64 (AMD64) only
+2) ARM64 only
+3) Both architectures (default)
+```
+
 # Notes on customizing to your needs
 
-It's important to use the same OpenSSL version as your Unreal Engine 5 version uses. You can find this information by going to `Engine/Source/Thirdparty/OpenSSL` in your Unreal Engine source, where the include folder will have a prefix such as `1.1.1n`. The `Dockerfile` downloads this version as it's compatible with UE 5.1, 5.2 and 5.3. You might need to change it for older or newer UE5 versions.  
+It's important to use the same OpenSSL version as your Unreal Engine 5 version uses. The build script automatically selects the correct OpenSSL version based on your Unreal Engine version selection. 
+
+If you need to use a different OpenSSL version:
+1. Select the "Other" option when prompted for the Unreal Engine version
+2. Enter the specific OpenSSL version you need (e.g., 1.1.1k, 1.1.1s)
+
+You can find the OpenSSL version used by your Unreal Engine installation by checking the include folder at `Engine/Source/Thirdparty/OpenSSL` in your Unreal Engine source.
 
 # Building the SDK
 
@@ -34,16 +85,42 @@ cd amazon-gamelift-toolkit/building-gamelift-server-sdk-for-unreal-engine-and-am
 ./buildbinaries.sh
 ```
 
-**Select** `Actions` and `Download` in CloudShell and type `/home/cloudshell-user/amazon-gamelift-toolkit/building-gamelift-server-sdk-for-unreal-engine-and-amazon-linux/AL2023GameliftUE5sdk.zip` to download the binaries to your local system.
+When prompted:
+1. Select your Unreal Engine version or choose "Other" to specify a custom OpenSSL version
+2. Choose which architecture(s) to build for
+
+**Select** `Actions` and `Download` in CloudShell to download the binaries to your local system:
+
+- For x86_64 (AMD64) binaries:
+  ```
+  /home/cloudshell-user/amazon-gamelift-toolkit/building-gamelift-server-sdk-for-unreal-engine-and-amazon-linux/AL2023GameliftUE5sdk-amd64.zip
+  ```
+
+- For ARM64 binaries:
+  ```
+  /home/cloudshell-user/amazon-gamelift-toolkit/building-gamelift-server-sdk-for-unreal-engine-and-amazon-linux/AL2023GameliftUE5sdk-arm64.zip
+  ```
+
+- For both architectures in a single package:
+  ```
+  /home/cloudshell-user/amazon-gamelift-toolkit/building-gamelift-server-sdk-for-unreal-engine-and-amazon-linux/AL2023GameliftUE5sdk-multiarch.zip
+  ```
+
 # Quick start with Amazon GameLift Unreal Plugin
 
 The Amazon GameLift Unreal plugin supports Linux-based deployments as long as you have the correct binaries available. If you feel like you already know what you're doing and only want to get the binaries to the right place, these steps help you do exactly that:
 
 1. Follow the steps in [Building the SDK](#building-the-sdk) to build the SDK and download the binaries
-2. Copy the `libaws-cpp-sdk-gamelift-server.so` to `amazon-gamelift-plugin-unreal/GameLiftPlugin/Source/GameliftServer/ThirdParty/GameLiftServerSDK/Linux/x86_64-unknown-linux-gnu/` inside the Amazon GameLift Unreal plugin in your project
-3. Once you've packaged the project for Linux, copy the files `libcrypto.so-.1.1` and `libssl.so.1.1` to your package folder under `<YOURGAME>/Binaries/Linux` before uploading the build to Amazon GameLift
+2. Copy the appropriate architecture's `libaws-cpp-sdk-gamelift-server.so` to `amazon-gamelift-plugin-unreal/GameLiftPlugin/Source/GameliftServer/ThirdParty/GameLiftServerSDK/Linux/x86_64-unknown-linux-gnu/` (for x86_64) or create a new `aarch64-unknown-linux-gnu` folder (for ARM64) inside the Amazon GameLift Unreal plugin in your project
+3. Once you've packaged the project for Linux, copy the files `libcrypto.so-.1.1` and `libssl.so.1.1` for the appropriate architecture to your package folder under `<YOURGAME>/Binaries/Linux` before uploading the build to Amazon GameLift
 
-See the next section for a detailed step by step guide.
+## ARM64-specific Configuration
+
+For ARM64 deployments, you will need to ensure:
+
+1. Your Unreal Engine build supports ARM64 for Linux
+2. You have the appropriate cross-compilation toolchain for ARM64
+3. In your Game project settings, you've set the target architecture to ARM64
 
 # Step by step instructions with Amazon GameLift Unreal Plugin
 
@@ -52,12 +129,15 @@ These are the more detailed steps on setting up your Unreal Engine project with 
 1. Follow the steps to build the SDK and download in Cloud Shell
 2. Build UE5 from source (DevelopmentEditor configuration) to start the editor
 3. Install the [cross-compile toolkit for your UE version](https://dev.epicgames.com/documentation/en-us/unreal-engine/linux-development-requirements-for-unreal-engine?application_version=5.4)
+   - For ARM64 support, ensure you have the ARM64 cross-compilation toolchain installed as well
 4. Create a new C++ based game project (3rd person), or use your existing game project with C++ enabled
 5. Download the [GameLift Unreal Plugin](https://github.com/aws/amazon-gamelift-plugin-unreal/releases/tag/v1.1.1)
   * Unzip the plugin, and then unzip the `amazon-gamelift-plugin-unreal-1.1.1-sdk-5.1.1.zip`
-  * We don’t need the SDK zip as we already built that
-6. Copy the `libaws-cpp-sdk-gamelift-server.so` which we built before to `amazon-gamelift-plugin-unreal/GameLiftPlugin/Source/GameliftServer/ThirdParty/GameLiftServerSDK/Linux/x86_64-unknown-linux-gnu/`
-7. Copy the `GameLiftPlugin` folder from the `gamelift-plugin-unreal` folder to the Plugins folder in the game project directory. (we’re following the instructions [here](https://docs.aws.amazon.com/gamelift/latest/developerguide/unreal-plugin-install.html)). You’ll need to create the plugins folder if you don’t have it yet
+  * We don't need the SDK zip as we already built that
+6. Copy the architecture-specific `libaws-cpp-sdk-gamelift-server.so` which we built before:
+   - For x86_64: Copy to `amazon-gamelift-plugin-unreal/GameLiftPlugin/Source/GameliftServer/ThirdParty/GameLiftServerSDK/Linux/x86_64-unknown-linux-gnu/`
+   - For ARM64: Create a directory `amazon-gamelift-plugin-unreal/GameLiftPlugin/Source/GameliftServer/ThirdParty/GameLiftServerSDK/Linux/aarch64-unknown-linux-gnu/` and copy the ARM64 version there
+7. Copy the `GameLiftPlugin` folder from the `gamelift-plugin-unreal` folder to the Plugins folder in the game project directory. (we're following the instructions [here](https://docs.aws.amazon.com/gamelift/latest/developerguide/unreal-plugin-install.html)). You'll need to create the plugins folder if you don't have it yet
 8. Add these to your uplugin project file under Plugins:
 ```json
     {
@@ -70,9 +150,9 @@ These are the more detailed steps on setting up your Unreal Engine project with 
     }
 ```
 9. Build the game project in Visual Studio
-10. Run your game project with “DevelopmentEditor” configuration to spin up the editor. For existing game project you might need to change the project to use the Unreal source code version.
+10. Run your game project with "DevelopmentEditor" configuration to spin up the editor. For existing game project you might need to change the project to use the Unreal source code version.
 11. Follow Step 1 and 2 only from the [Unreal Plugin Anywhere setup](https://docs.aws.amazon.com/gamelift/latest/developerguide/unreal-plugin-anywhere.html) to set up your profile, set up your game mode code, integrate your client game map, and build your game (the AWS profile setup before this is optional for our needs). Note on the following:
-  * For setting the maps, make sure you select the settings icon and “Show plugin content” to find the sample startup map
+  * For setting the maps, make sure you select the settings icon and "Show plugin content" to find the sample startup map
   * You will need to restart the editor to get the build targets showing correctly
 12. We need to fix the m_processId definition in your game mode CPP file (somewhere around line 82) to work correctly on Linux. Replace it with this:
 ```cpp
@@ -84,9 +164,9 @@ These are the more detailed steps on setting up your Unreal Engine project with 
             ServerParametersForAnywhere.m_processId = TCHAR_TO_UTF8(*ProcessId);
         }
 ```
-13. Package the project for Linux. In the Editor select “Platforms”, then select “Linux” and select your Server build target. Then select “Package project”
-14. Once it’s packaged, copy the files `libcrypto.so-.1.1` and `libssl.so.1.1` to your package folder under `<YOURGAME>/Binaries/Linux`
-15. Create an install.sh file in the root of the build. Replace `<YOURGAME>`  and `<YOURGAMEBINARY>` with the correct folder and binary name. Make sure you have Unix line endings in the script by following a guide like this one if you’re creating on Windows.
+13. Package the project for Linux. In the Editor select "Platforms", then select "Linux" and select your Server build target. Configure the target architecture for x86_64 or ARM64 as needed. Then select "Package project"
+14. Once it's packaged, copy the architecture-appropriate files `libcrypto.so-.1.1` and `libssl.so.1.1` to your package folder under `<YOURGAME>/Binaries/Linux`
+15. Create an install.sh file in the root of the build. Replace `<YOURGAME>`  and `<YOURGAMEBINARY>` with the correct folder and binary name. Make sure you have Unix line endings in the script by following a guide like this one if you're creating on Windows.
 ```bash
 #!/bin/bash
 
@@ -97,6 +177,7 @@ sudo chmod 777 /local/game/<YOURGAME>/Binaries/Linux/<YOURGAMEBINARY>
 17. Follow the guide for [deploying a managed Amazon GameLift fleet with the plugin](https://docs.aws.amazon.com/gamelift/latest/developerguide/unreal-plugin-ec2.html) to deploy a test fleet. (You could also manually upload the build using the AWS CLI and use any method you want for creating a fleet). Make sure to do the following changes to deployment for Amazon Linux 2023
   * Set the `Server Build OS`to `Amazon Linux 2023 (AL2023`) in the UI
   * Manually input the `Server build executable` (this has to be an absolute path)
+  * For ARM64 deployments, make sure to select an appropriate ARM-based instance type like Graviton (e.g., c6g, m6g, t4g family)
 18. Build and run a Windows client using the plugin
 
 
