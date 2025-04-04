@@ -33,15 +33,18 @@ get_openssl_version() {
 
 # Prompt for Unreal Engine version
 echo ""
-echo "Select your Unreal Engine version:"
-echo "1) UE 5.0"
-echo "2) UE 5.1"
-echo "3) UE 5.2"
-echo "4) UE 5.3"
-echo "5) UE 5.4"
-echo "6) UE 5.5"
+echo "Select your Unreal Engine version to determine the correct OpenSSL version:"
+echo "Each UE version requires a specific OpenSSL version for compatibility"
+echo "-----------------------------------------------------------------------------"
+echo "1) UE 5.0 (uses OpenSSL 1.1.1l)"
+echo "2) UE 5.1 (uses OpenSSL 1.1.1n)"
+echo "3) UE 5.2 (uses OpenSSL 1.1.1n)"
+echo "4) UE 5.3 (uses OpenSSL 1.1.1t)"
+echo "5) UE 5.4 (uses OpenSSL 1.1.1t)"
+echo "6) UE 5.5 (uses OpenSSL 1.1.1t)"
 echo "7) Other (specify custom OpenSSL version)"
-read -p "Enter your choice [1-7] or press Enter for default (UE 5.2): " ue_choice
+echo "-----------------------------------------------------------------------------"
+read -p "Enter your choice [1-7] or press Enter for default (UE 5.2 with OpenSSL 1.1.1n): " ue_choice
 
 # Set UE version based on user choice
 case "$ue_choice" in
@@ -71,6 +74,8 @@ case "$ue_choice" in
         ;;
     7)
         echo "You've selected to use a custom OpenSSL version."
+        echo "NOTE: This should match the OpenSSL version used by your Unreal Engine installation."
+        echo "      Check Engine/Source/ThirdParty/OpenSSL in your UE source directory to confirm."
         read -p "Enter the OpenSSL version (e.g., 1.1.1k, 1.1.1q): " custom_openssl
         if [[ -z "$custom_openssl" ]]; then
             echo "No version provided. Using default (1.1.1t)"
@@ -90,7 +95,7 @@ esac
 if [[ "$ue_version" == "custom" ]]; then
     echo "Using custom OpenSSL version ${openssl_version}"
 else
-    echo "Using OpenSSL version ${openssl_version} for Unreal Engine ${ue_version}"
+    echo "Selected Unreal Engine ${ue_version} - Will build with OpenSSL ${openssl_version}"
 fi
 
 # Prompt for architecture selection

@@ -23,21 +23,26 @@ The build script supports both x86_64 (AMD64) and ARM64 architectures, producing
 
 The build script provides interactive prompts to customize your build:
 
-## 1. Unreal Engine Version Selection
+## 1. Unreal Engine Version and OpenSSL Selection
 
-You'll be prompted to select your Unreal Engine version:
+**IMPORTANT:** Each Unreal Engine version requires a specific OpenSSL version for compatibility. Using the wrong OpenSSL version can cause runtime crashes and other issues.
+
+You'll be prompted to select your Unreal Engine version, which automatically determines the matching OpenSSL version:
 ```
-Select your Unreal Engine version:
-1) UE 5.0
-2) UE 5.1
-3) UE 5.2
-4) UE 5.3
-5) UE 5.4
-6) UE 5.5
+Select your Unreal Engine version to determine the correct OpenSSL version:
+Each UE version requires a specific OpenSSL version for compatibility
+-----------------------------------------------------------------------------
+1) UE 5.0 (uses OpenSSL 1.1.1l)
+2) UE 5.1 (uses OpenSSL 1.1.1n)
+3) UE 5.2 (uses OpenSSL 1.1.1n)
+4) UE 5.3 (uses OpenSSL 1.1.1t)
+5) UE 5.4 (uses OpenSSL 1.1.1t)
+6) UE 5.5 (uses OpenSSL 1.1.1t)
 7) Other (specify custom OpenSSL version)
+-----------------------------------------------------------------------------
 ```
 
-This selection automatically determines the appropriate OpenSSL version for your Unreal Engine version:
+The OpenSSL version mapping for each UE version:
 - UE 5.0: OpenSSL 1.1.1l
 - UE 5.1: OpenSSL 1.1.1n
 - UE 5.2: OpenSSL 1.1.1n
@@ -58,13 +63,17 @@ Select which architecture(s) to build for:
 
 # Notes on customizing to your needs
 
-It's important to use the same OpenSSL version as your Unreal Engine 5 version uses. The build script automatically selects the correct OpenSSL version based on your Unreal Engine version selection. 
+## OpenSSL Version Compatibility
+
+It is **critical** to use the exact same OpenSSL version as your Unreal Engine 5 installation. The build script automatically selects the correct version based on your UE version choice, but if you're using a custom or patched version of UE, you may need to specify a different OpenSSL version.
 
 If you need to use a different OpenSSL version:
 1. Select the "Other" option when prompted for the Unreal Engine version
 2. Enter the specific OpenSSL version you need (e.g., 1.1.1k, 1.1.1s)
 
-You can find the OpenSSL version used by your Unreal Engine installation by checking the include folder at `Engine/Source/Thirdparty/OpenSSL` in your Unreal Engine source.
+You can find the exact OpenSSL version used by your Unreal Engine installation by checking the include folder at `Engine/Source/Thirdparty/OpenSSL` in your Unreal Engine source. The folder will have a name like `OpenSSL_1_1_1t-UEx.xx.x` indicating which version is used.
+
+Using an incompatible OpenSSL version can lead to runtime crashes or networking failures in your game.
 
 # Building the SDK
 
@@ -86,7 +95,7 @@ cd amazon-gamelift-toolkit/building-gamelift-server-sdk-for-unreal-engine-and-am
 ```
 
 When prompted:
-1. Select your Unreal Engine version or choose "Other" to specify a custom OpenSSL version
+1. Select your Unreal Engine version to determine the appropriate OpenSSL version
 2. Choose which architecture(s) to build for
 
 **Select** `Actions` and `Download` in CloudShell to download the binaries to your local system:
