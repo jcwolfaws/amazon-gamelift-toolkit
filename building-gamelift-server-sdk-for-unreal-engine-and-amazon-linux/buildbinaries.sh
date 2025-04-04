@@ -31,6 +31,32 @@ get_openssl_version() {
     esac
 }
 
+# Setup Docker buildx for multi-architecture builds
+setup_buildx() {
+    echo "Setting up Docker buildx for multi-architecture builds..."
+    
+    # Check if Docker buildx is available
+    if ! docker buildx version &>/dev/null; then
+        echo "Error: Docker buildx not available. Please use Docker 19.03 or newer."
+        exit 1
+    fi
+    
+    # Set up QEMU for multi-architecture emulation
+    docker run --privileged --rm tonistiigi/binfmt --install all
+    
+    # Create a new builder instance if it doesn't exist
+    if ! docker buildx inspect mybuilder &>/dev/null; then
+        docker buildx create --name mybuilder --use
+    else
+        docker buildx use mybuilder
+    fi
+    
+    # Bootstrap the builder
+    docker buildx inspect --bootstrap
+    
+    echo "Docker buildx setup complete."
+}
+
 # Prompt for Unreal Engine version
 echo ""
 echo "Select your Unreal Engine version to determine the correct OpenSSL version:"
@@ -133,54 +159,76 @@ esac
 # Create output directories
 mkdir -p output
 
+# Setup Docker buildx for multi-architecture builds 
+# (only needed if building for ARM64 or both architectures)
+if [[ "$build_arm64" = true ]]; then
+    setup_buildx
+fi
+
 # Build for AMD64 (x86_64)
 if [[ "$build_amd64" = true ]]; then
     echo "Building for AMD64 (x86_64) architecture..."
     mkdir -p output/amd64
-    docker buildx build --platform=linux/amd64 --build-arg TARGETARCH=amd64 \
+    docker buildx build --progress=plain --platform=linux/amd64 \
+                        --build-arg TARGETARCH=amd64 \
                         --build-arg OPENSSL_VERSION=${openssl_version} \
-                        --output=./output/amd64 --target=server .
+                        --output=type=local,dest=./output/amd64 \
+                        --target=server .
     
-    echo "Creating AMD64 zip file..."
-    cd output/amd64
-    zip -r ../../AL2023GameliftUE5sdk-amd64.zip ./*
-    cd ../..
+    if [ $? -eq 0 ] && [ "$(ls -A output/amd64 2>/dev/null)" ]; then
+        echo "Creating AMD64 zip file..."
+        cd output/amd64
+        zip -r ../../AL2023GameliftUE5sdk-amd64.zip ./*
+        cd ../..
+    else
+        echo "Error: AMD64 build failed or output directory is empty"
+    fi
 fi
 
 # Build for ARM64
 if [[ "$build_arm64" = true ]]; then
     echo "Building for ARM64 architecture..."
     mkdir -p output/arm64
-    docker buildx build --platform=linux/arm64 --build-arg TARGETARCH=arm64 \
+    docker buildx build --progress=plain --platform=linux/arm64 \
+                        --build-arg TARGETARCH=arm64 \
                         --build-arg OPENSSL_VERSION=${openssl_version} \
-                        --output=./output/arm64 --target=server .
+                        --output=type=local,dest=./output/arm64 \
+                        --target=server .
     
-    echo "Creating ARM64 zip file..."
-    cd output/arm64
-    zip -r ../../AL2023GameliftUE5sdk-arm64.zip ./*
-    cd ../..
+    if [ $? -eq 0 ] && [ "$(ls -A output/arm64 2>/dev/null)" ]; then
+        echo "Creating ARM64 zip file..."
+        cd output/arm64
+        zip -r ../../AL2023GameliftUE5sdk-arm64.zip ./*
+        cd ../..
+    else
+        echo "Error: ARM64 build failed or output directory is empty"
+    fi
 fi
 
 # Create a combined zip file with both architectures if both were built
-if [[ "$build_amd64" = true && "$build_arm64" = true ]]; then
+if [[ "$build_amd64" = true && "$build_arm64" = true ]] && \
+   [ -f "AL2023GameliftUE5sdk-amd64.zip" ] && [ -f "AL2023GameliftUE5sdk-arm64.zip" ]; then
     echo "Creating multi-architecture package..."
     mkdir -p combined/amd64
     mkdir -p combined/arm64
-    cp output/amd64/lib* combined/amd64/
-    cp output/arm64/lib* combined/arm64/
+    
+    # Extract the individual zip files to the combined directory
+    unzip -o AL2023GameliftUE5sdk-amd64.zip -d combined/amd64
+    unzip -o AL2023GameliftUE5sdk-arm64.zip -d combined/arm64
+    
     cd combined
     zip -r ../AL2023GameliftUE5sdk-multiarch.zip ./*
     cd ..
 fi
 
 echo "Build complete! The following files are available for download:"
-if [[ "$build_amd64" = true ]]; then
+if [[ "$build_amd64" = true ]] && [ -f "AL2023GameliftUE5sdk-amd64.zip" ]; then
     echo "- AMD64 (x86_64) binaries: AL2023GameliftUE5sdk-amd64.zip"
 fi
-if [[ "$build_arm64" = true ]]; then
+if [[ "$build_arm64" = true ]] && [ -f "AL2023GameliftUE5sdk-arm64.zip" ]; then
     echo "- ARM64 binaries: AL2023GameliftUE5sdk-arm64.zip"
 fi
-if [[ "$build_amd64" = true && "$build_arm64" = true ]]; then
+if [[ "$build_amd64" = true && "$build_arm64" = true ]] && [ -f "AL2023GameliftUE5sdk-multiarch.zip" ]; then
     echo "- Multi-architecture package: AL2023GameliftUE5sdk-multiarch.zip"
 fi
 

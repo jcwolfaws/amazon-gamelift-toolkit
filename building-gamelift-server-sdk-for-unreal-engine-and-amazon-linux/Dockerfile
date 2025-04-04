@@ -1,7 +1,8 @@
-FROM public.ecr.aws/amazonlinux/amazonlinux:latest as build-server
+FROM --platform=$BUILDPLATFORM public.ecr.aws/amazonlinux/amazonlinux:latest as build-server
 
 # Set architecture as build arg with default to amd64
 ARG TARGETARCH=amd64
+ARG BUILDPLATFORM
 # Set OpenSSL version as build arg with default to 1.1.1n (compatible with UE 5.1, 5.2)
 ARG OPENSSL_VERSION=1.1.1n
 
