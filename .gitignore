@@ -1,0 +1,24 @@
+# macOS system files
+.DS_Store
+**/.DS_Store
+
+# Build artifacts
+*.zip
+**/output/
+**/AL2023GameliftUE5sdk-*/
+
+# Editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Local environment files
+.env
+.env.local
+
+# Dependencies and build directories
+**/node_modules/
+**/build/
+**/dist/
+**/tmp/ 
