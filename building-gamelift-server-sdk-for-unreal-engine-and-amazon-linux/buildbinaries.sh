@@ -421,6 +421,19 @@ if [ -f "AL2023GameliftUE5sdk-amd64.zip" ] && [ -f "AL2023GameliftUE5sdk-arm64.z
     (cd combined && zip -q -r ../AL2023GameliftUE5sdk-multiarch.zip ./* > /dev/null 2>&1 || echo "Warning: Error creating multi-arch zip")
 fi
 
+# Clean up temporary directories after successful builds
+# Clean up combined directory if it exists and the multiarch zip was created
+if [ -d "combined" ] && [ -f "AL2023GameliftUE5sdk-multiarch.zip" ]; then
+    echo "Cleaning up temporary combined directory..."
+    rm -rf combined
+fi
+
+# Clean up output directory if at least one build succeeded
+if [ -f "AL2023GameliftUE5sdk-amd64.zip" ] || [ -f "AL2023GameliftUE5sdk-arm64.zip" ]; then
+    echo "Cleaning up temporary output directories..."
+    rm -rf output
+fi
+
 echo ""
 echo "========================================================================"
 echo "                          BUILD RESULTS"
